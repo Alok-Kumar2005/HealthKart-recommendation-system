@@ -6,3 +6,5 @@ gdown
 ipykernel
 nltk
 imbalanced-learn
+mlflow
+dagshub
