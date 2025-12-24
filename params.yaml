@@ -1,3 +1,12 @@
 feature_engineering:
   test_size: 0.2
   random_state: 42
+
+tfidf:
+  max_features: 5000
+  ngram_range: [1, 2]
+
+model:
+  C: 0.1
+  max_iter: 5000
+  class_weight: balanced
