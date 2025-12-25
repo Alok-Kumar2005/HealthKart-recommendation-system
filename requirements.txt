@@ -8,3 +8,6 @@ nltk
 imbalanced-learn
 mlflow
 dagshub
+spacy
+joblib
+pyyaml
