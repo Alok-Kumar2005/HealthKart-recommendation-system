@@ -10,3 +10,7 @@ model:
   C: 0.1
   max_iter: 5000
   class_weight: balanced
+
+sentiment_score:
+  normalized_rating: 0.6
+  positive_ratio: 0.4
