@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dagshub>=0.6.4",
+    "fastapi>=0.127.0",
     "gdown>=5.2.0",
     "imbalanced-learn>=0.14.1",
     "ipykernel>=7.1.0",
@@ -15,7 +16,10 @@ dependencies = [
     "nltk>=3.9.2",
     "numpy>=2.4.0",
     "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+    "python-multipart>=0.0.21",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.8.0",
     "spacy>=3.8.11",
+    "uvicorn[standard]>=0.40.0",
 ]
