@@ -192,6 +192,11 @@ docker run -p 5000:8000 alok8090/healthkart-recommendation:v1.0
 http://localhost:5000/docs
 ```
 
+## Compare models
+``
+https://dagshub.com/ay747283/HealthKart-recommendation-system.mlflow
+```
+
 ---
 
 ## 🎓 Training Pipeline
