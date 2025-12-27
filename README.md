@@ -185,6 +185,13 @@ python -m spacy download en_core_web_sm
 mkdir -p logs models/recommender data/raw data/preprocessed_data data/final_data data/entity_data
 ```
 
+## Pull image, run and check
+```
+docker pull alok8090/healthkart-recommendation:v1.0
+docker run -p 5000:8000 alok8090/healthkart-recommendation:v1.0
+http://localhost:5000/docs
+```
+
 ---
 
 ## 🎓 Training Pipeline
@@ -738,7 +745,3 @@ python src/recommender/inference.py
 curl http://localhost:8000/health
 ```
 
-# Pull image
-```
-docker pull alok8090/healthkart-recommendation:v1.0
-```
