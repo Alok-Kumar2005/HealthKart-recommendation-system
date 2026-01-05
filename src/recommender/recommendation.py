@@ -7,6 +7,7 @@ import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
+from src.recommender.temporal_analysis import TemporalSentimentAnalysis
 from src.exception import CustomException
 from src.logging import logging
 
@@ -32,6 +33,8 @@ class RecommendationSystem:
         self.sentiment_model = None
         self.text_vectorizer = None
         self.params = load_params()
+        self.trend_scores = None
+        self.weighted_sentiment_scores = None
 
     def load_data(self):
         try:
@@ -55,6 +58,16 @@ class RecommendationSystem:
             return "neutral"
         else:
             return "negative"
+        
+    def TemporalAnalysis(self):
+        try:
+            logging.info("Performing temporal sentiment analysis")
+            temporal_analyzer = TemporalSentimentAnalysis()
+            self.trend_scores, self.weighted_sentiment_scores = temporal_analyzer.analyze_and_save()
+        except Exception as e:
+            logging.error("Error in temporal sentiment analysis")
+            raise CustomException(e, sys)
+
         
     def CalculateSentimentScore(self):
         try:
@@ -147,7 +160,18 @@ class RecommendationSystem:
         except Exception as e:
             logging.error("Error building collaborative filtering system")
             raise CustomException(e, sys)  
-            
+        
+    def apply_trend_boost(self, product_name: str, base_score: float):
+        """ Boost or penalize based on sentiment score"""
+        if self.trend_scores is None or product_name not in self.trend_scores:
+            return base_score
+        trend_data = self.trend_scores[product_name]
+        trend_score = trend_data['trend_score']
+
+        ## simple rule: Improving product get 15 % boost, declining get 15% penalty
+        trend_modifier = 1.0 + (trend_score * self.params['temporal_sentiment']['boost_percentage'])
+        return base_score * trend_modifier
+
     def getRecommendations(self,
                            product_name: str,
                            product_features: pd.DataFrame,
@@ -157,7 +181,8 @@ class RecommendationSystem:
                            n_recommendations: int = 10,
                            sentiment_weight: float = 0.4,
                            content_weight: float = 0.4,
-                           collaborative_weight: float = 0.2
+                           collaborative_weight: float = 0.2,
+                           trend_weight: float = 0.15
                            ):
         try:
             logging.info(f"Generating recommendations for product: {product_name}")
@@ -187,10 +212,19 @@ class RecommendationSystem:
                 sentiment_score = sentiment_dict.get(prod_name, 0.5)  ## default neutral score
                 collab_score = collab_products.get(prod_name, 0) / max_collab
 
+                ## trend score
+                trend_score = 0.5
+                if self.trend_scores and prod_name in self.trend_scores:
+                    trend_data = self.trend_scores[prod_name]
+                    raw_trend = trend_data['trend_score']
+                    trend_score = 0.5 + (raw_trend * 2)  # Scale to 0-1
+                    trend_score = np.clip(trend_score, 0, 1)
+
                 hybrid_score = (
                     sentiment_weight * sentiment_score +
                     content_weight * content_score +
-                    collaborative_weight * collab_score
+                    collaborative_weight * collab_score +
+                    trend_weight * trend_score
                 )
                 
                 recommendations.append(
@@ -202,7 +236,9 @@ class RecommendationSystem:
                         'hybrid_score': hybrid_score,
                         'content_score': content_score,
                         'sentiment_score': sentiment_score,
-                        'collab_score': collab_score
+                        'collab_score': collab_score,
+                        'trend_score': trend_score,
+                        'trend_direction': self.trend_scores[prod_name]['trend_direction'] if self.trend_scores and prod_name in self.trend_scores else 'unknown'
                     }
                 )
             recommendations = sorted(recommendations, key=lambda x: x['hybrid_score'], reverse=True)
@@ -216,6 +252,7 @@ class RecommendationSystem:
         try:
             logging.info("Training recommendation system...")
             self.load_data()
+            self.TemporalAnalysis()
             sentiment_scores = self.CalculateSentimentScore()
             product_features, similarity_matrix, tfidf = self.ContentBasedRecommender()
             co_occurrence = self.CollaborativeRecommender()
@@ -243,7 +280,7 @@ class RecommendationSystem:
                 sentiment_scores,
                 co_occurrence
             )
-            print("\n", recs[['product_name', 'brand', 'hybrid_score', 'avg_rating']].head())
+            print("\n", recs[['product_name', 'brand', 'hybrid_score', 'trend_direction', 'avg_rating']].head())
             
         except Exception as e:
             logging.error("Error training recommendation system")

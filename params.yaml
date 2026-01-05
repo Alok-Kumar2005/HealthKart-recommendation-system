@@ -19,3 +19,4 @@ temporal_sentiment:
   rating_slope: 0.6
   positive_slope: 0.4
   decay_constant: 180
+  boost_percentage: 0.15
