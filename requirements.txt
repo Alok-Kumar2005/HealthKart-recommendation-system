@@ -15,3 +15,5 @@ fastapi
 uvicorn[standard]
 pydantic
 python-multipart
+torch
+transformers

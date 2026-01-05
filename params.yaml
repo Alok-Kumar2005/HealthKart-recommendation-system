@@ -14,3 +14,8 @@ model:
 sentiment_score:
   normalized_rating: 0.6
   positive_ratio: 0.4
+
+temporal_sentiment:
+  rating_slope: 0.6
+  positive_slope: 0.4
+  decay_constant: 180

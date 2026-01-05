@@ -13,7 +13,7 @@ class EntityExtraction:
         self,
         data_path: str = "data/raw/dataset.csv",
         output_dir: str = "data/entity_data",
-        output_file: str = "entity_extracted.csv"
+        output_file: str = "entity_extracted2.csv"
     ):
         self.data_path = data_path
         self.output_dir = output_dir
@@ -120,7 +120,7 @@ class EntityExtraction:
             output_df = df[[
                 'id', 'name', 'extracted_brand', 'main_category', 
                 'sub_category', 'all_categories', 'product_attributes',
-                'reviews.text', 'reviews.rating', 'reviews.title'
+                'reviews.text', 'reviews.rating', 'reviews.title', 'reviews.date'
             ]].copy()
             
             logging.info("Entity extraction completed")
