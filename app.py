@@ -16,7 +16,7 @@ from src.logging import logging
 app = FastAPI(
     title="HealthKart Recommendation System API",
     description="API for sentiment analysis and product recommendations",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -85,6 +85,8 @@ class ProductRecommendation(BaseModel):
     content_score: float
     sentiment_score: float
     collab_score: float
+    trend_score: float 
+    trend_direction: str
 
 
 class RecommendationResponse(BaseModel):
@@ -113,32 +115,16 @@ async def health_check():
         if sentiment_model is None or recommender_model is None:
             raise HTTPException(status_code=503, detail="Models not loaded")
         
+        # Check if temporal analysis is available
+        has_temporal = recommender_model.trend_scores is not None
+        
         return {
             "status": "success",
-            "message": "All systems operational"
+            "message": f"All systems operational (Temporal Analysis: {'Enabled' if has_temporal else 'Disabled'})"
         }
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-
-@app.post("/predict-sentiment", response_model=SentimentResponse)
-async def predict_sentiment(request: SentimentRequest):
-    try:
-        if sentiment_model is None:
-            raise HTTPException(status_code=503, detail="Sentiment model not loaded")
-        
-        if not request.text or not request.text.strip():
-            raise HTTPException(status_code=400, detail="Text cannot be empty")
-        
-        result = sentiment_model.predict(request.text)
-        return result
-        
-    except CustomException as e:
-        logging.error(f"Custom exception in sentiment prediction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logging.error(f"Error in sentiment prediction: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @app.post("/recommend", response_model=RecommendationResponse)
@@ -160,9 +146,12 @@ async def get_recommendations(request: RecommendationRequest):
             request.product_name,
             n_recommendations=request.n_recommendations
         )
+        
         if isinstance(recommendations_df, str):
             raise HTTPException(status_code=404, detail=recommendations_df)
+        
         recommendations = recommendations_df.to_dict('records')
+        
         return {
             "query_product": request.product_name,
             "recommendations": recommendations,
