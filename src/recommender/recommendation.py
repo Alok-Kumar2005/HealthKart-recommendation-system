@@ -7,7 +7,6 @@ import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
-from src.recommender.temporal_analysis import TemporalSentimentAnalysis
 from src.exception import CustomException
 from src.logging import logging
 
@@ -33,8 +32,6 @@ class RecommendationSystem:
         self.sentiment_model = None
         self.text_vectorizer = None
         self.params = load_params()
-        self.trend_scores = None
-        self.weighted_sentiment_scores = None
 
     def load_data(self):
         try:
@@ -58,16 +55,6 @@ class RecommendationSystem:
             return "neutral"
         else:
             return "negative"
-        
-    def TemporalAnalysis(self):
-        try:
-            logging.info("Performing temporal sentiment analysis")
-            temporal_analyzer = TemporalSentimentAnalysis()
-            self.trend_scores, self.weighted_sentiment_scores = temporal_analyzer.analyze_and_save()
-        except Exception as e:
-            logging.error("Error in temporal sentiment analysis")
-            raise CustomException(e, sys)
-
         
     def CalculateSentimentScore(self):
         try:
@@ -159,30 +146,73 @@ class RecommendationSystem:
 
         except Exception as e:
             logging.error("Error building collaborative filtering system")
-            raise CustomException(e, sys)  
-        
-    def apply_trend_boost(self, product_name: str, base_score: float):
-        """ Boost or penalize based on sentiment score"""
-        if self.trend_scores is None or product_name not in self.trend_scores:
-            return base_score
-        trend_data = self.trend_scores[product_name]
-        trend_score = trend_data['trend_score']
-
-        ## simple rule: Improving product get 15 % boost, declining get 15% penalty
-        trend_modifier = 1.0 + (trend_score * self.params['temporal_sentiment']['boost_percentage'])
-        return base_score * trend_modifier
-
+            raise CustomException(e, sys)
+    
+    def calculate_temporal_analysis(self, product_features):
+        """
+        Calculate trend scores and directions for products
+        This method should match what's in temporal_analysis.py
+        """
+        try:
+            logging.info("Calculating temporal analysis...")
+            
+            # Create dictionaries to store trend data
+            trend_scores = {}
+            trend_directions = {}
+            
+            # Simple temporal analysis based on review patterns
+            for _, product in product_features.iterrows():
+                product_name = product['name']
+                
+                # Get product reviews
+                product_reviews = self.df[self.df['name'] == product_name]
+                
+                if len(product_reviews) > 0:
+                    # Calculate trend score (normalized by review count)
+                    avg_rating = product_reviews['reviews.rating'].mean()
+                    review_count = len(product_reviews)
+                    
+                    # Normalize trend score
+                    trend_score = min(review_count / 100, 1.0) * (avg_rating / 5.0)
+                    trend_scores[product_name] = trend_score
+                    
+                    # Determine trend direction based on rating distribution
+                    recent_reviews = product_reviews.tail(min(10, len(product_reviews)))
+                    if len(recent_reviews) >= 3:
+                        recent_avg = recent_reviews['reviews.rating'].mean()
+                        overall_avg = product_reviews['reviews.rating'].mean()
+                        
+                        if recent_avg > overall_avg + 0.3:
+                            trend_directions[product_name] = 'rising'
+                        elif recent_avg < overall_avg - 0.3:
+                            trend_directions[product_name] = 'falling'
+                        else:
+                            trend_directions[product_name] = 'stable'
+                    else:
+                        trend_directions[product_name] = 'stable'
+                else:
+                    trend_scores[product_name] = 0.5
+                    trend_directions[product_name] = 'unknown'
+            
+            logging.info("Temporal analysis completed")
+            return trend_scores, trend_directions
+            
+        except Exception as e:
+            logging.error("Error in temporal analysis")
+            raise CustomException(e, sys)
+            
     def getRecommendations(self,
                            product_name: str,
                            product_features: pd.DataFrame,
                            similarity_matrix: np.ndarray,
                            sentiment_scores: pd.DataFrame,
                            co_occurrence: dict,
+                           trend_scores: dict = None,
+                           trend_directions: dict = None,
                            n_recommendations: int = 10,
                            sentiment_weight: float = 0.4,
                            content_weight: float = 0.4,
-                           collaborative_weight: float = 0.2,
-                           trend_weight: float = 0.15
+                           collaborative_weight: float = 0.2
                            ):
         try:
             logging.info(f"Generating recommendations for product: {product_name}")
@@ -212,20 +242,15 @@ class RecommendationSystem:
                 sentiment_score = sentiment_dict.get(prod_name, 0.5)  ## default neutral score
                 collab_score = collab_products.get(prod_name, 0) / max_collab
 
-                ## trend score
-                trend_score = 0.5
-                if self.trend_scores and prod_name in self.trend_scores:
-                    trend_data = self.trend_scores[prod_name]
-                    raw_trend = trend_data['trend_score']
-                    trend_score = 0.5 + (raw_trend * 2)  # Scale to 0-1
-                    trend_score = np.clip(trend_score, 0, 1)
-
                 hybrid_score = (
                     sentiment_weight * sentiment_score +
                     content_weight * content_score +
-                    collaborative_weight * collab_score +
-                    trend_weight * trend_score
+                    collaborative_weight * collab_score
                 )
+                
+                # Get trend information if available
+                trend_score = trend_scores.get(prod_name, 0.5) if trend_scores else 0.5
+                trend_direction = trend_directions.get(prod_name, 'unknown') if trend_directions else 'unknown'
                 
                 recommendations.append(
                     {
@@ -238,7 +263,7 @@ class RecommendationSystem:
                         'sentiment_score': sentiment_score,
                         'collab_score': collab_score,
                         'trend_score': trend_score,
-                        'trend_direction': self.trend_scores[prod_name]['trend_direction'] if self.trend_scores and prod_name in self.trend_scores else 'unknown'
+                        'trend_direction': trend_direction
                     }
                 )
             recommendations = sorted(recommendations, key=lambda x: x['hybrid_score'], reverse=True)
@@ -252,10 +277,12 @@ class RecommendationSystem:
         try:
             logging.info("Training recommendation system...")
             self.load_data()
-            self.TemporalAnalysis()
             sentiment_scores = self.CalculateSentimentScore()
             product_features, similarity_matrix, tfidf = self.ContentBasedRecommender()
             co_occurrence = self.CollaborativeRecommender()
+            
+            # Calculate temporal analysis
+            trend_scores, trend_directions = self.calculate_temporal_analysis(product_features)
             
             # Save models
             os.makedirs(self.output_dir, exist_ok=True)
@@ -269,6 +296,11 @@ class RecommendationSystem:
                 pickle.dump(co_occurrence, f)
             with open(os.path.join(self.output_dir, 'content_tfidf.pkl'), 'wb') as f:
                 pickle.dump(tfidf, f)
+            # Save temporal analysis data
+            with open(os.path.join(self.output_dir, 'trend_scores.pkl'), 'wb') as f:
+                pickle.dump(trend_scores, f)
+            with open(os.path.join(self.output_dir, 'trend_directions.pkl'), 'wb') as f:
+                pickle.dump(trend_directions, f)
             
             logging.info(f"Recommendation models saved to {self.output_dir}")
             sample_product = product_features['name'].iloc[0]
@@ -278,9 +310,11 @@ class RecommendationSystem:
                 product_features, 
                 similarity_matrix,
                 sentiment_scores,
-                co_occurrence
+                co_occurrence,
+                trend_scores,
+                trend_directions
             )
-            print("\n", recs[['product_name', 'brand', 'hybrid_score', 'trend_direction', 'avg_rating']].head())
+            print("\n", recs[['product_name', 'brand', 'hybrid_score', 'avg_rating', 'trend_score', 'trend_direction']].head())
             
         except Exception as e:
             logging.error("Error training recommendation system")
