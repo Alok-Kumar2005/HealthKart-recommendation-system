@@ -24,7 +24,7 @@ class TemporalSentimentAnalysis:
         try:
             logging.info("Loading entity extracted data...")
             self.df = pd.read_csv(self.entity_data_path)
-            self.df['review_date'] = pd.to_datetime(self.df['reviews.date'], errors='coerce', utc=True)
+            self.df['review_date'] = pd.to_datetime(self.df['reviews.date'], errors='coerce').dt.tz_localize(None)
 
             ## Drop rows with invalid dates
             self.df = self.df.dropna(subset=['review_date'])
@@ -140,7 +140,7 @@ class TemporalSentimentAnalysis:
         try:
             logging.info("Calculating weighted sentiment scores...")
             self.df = self.calculate_recency_weights()
-            weighted_scores = self.df.groupby(['name', 'extracted_brand', 'main_category']).apply(
+            weighted_scores = self.df.groupby(['name', 'extracted_brand', 'main_category'], group_keys=False).apply(
                 lambda x: pd.Series({
                     'weighted_avg_rating': (x['reviews.rating'] * x['recency_weight']).sum() / x['recency_weight'].sum(),
                     'weighted_positive_ratio': ((x['sentiment'] == 'positive') * x['recency_weight']).sum() / x['recency_weight'].sum(),

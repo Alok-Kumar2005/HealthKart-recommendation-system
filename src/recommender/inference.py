@@ -10,6 +10,7 @@ class RecommenderInference:
     def __init__(self, model_dir: str = "models/recommender"):
         self.model_dir = model_dir
         self.load_models()
+        self.trend_scores = None
 
     def load_models(self):
         try:
@@ -21,6 +22,10 @@ class RecommenderInference:
                 self.sentiment_scores = pickle.load(f)
             with open(os.path.join(self.model_dir, 'co_occurrence.pkl'), 'rb') as f:
                 self.co_occurrence = pickle.load(f)
+            ## new trend model
+            with open(os.path.join(self.model_dir, 'trend_scores.pkl'), 'rb') as f:
+                self.trend_scores = pickle.load(f)
+                
             
             logging.info("Models loaded.....")
         except Exception as e:
@@ -28,6 +33,8 @@ class RecommenderInference:
         
     def recommend(self, product_name: str, n_recommendations:int = 10):
         recommender = RecommendationSystem()
+        recommender.trend_scores = self.trend_scores
+
         return recommender.getRecommendations(
             product_name,
             self.product_features,
@@ -40,5 +47,5 @@ class RecommenderInference:
 
 if __name__ == '__main__':
     model = RecommenderInference()
-    res = model.recommend("Pink Friday: Roman Reloaded Re-Up (w/dvd)")
+    res = model.recommend("Independence Day Resurgence (4k/uhd + Blu-Ray + Digital)")
     print(res)
